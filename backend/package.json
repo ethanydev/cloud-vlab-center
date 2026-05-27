@@ -1,0 +1,17 @@
+{
+  "name": "cloud-vlab-center",
+  "version": "1.0.0",
+  "description": "클라우드 기반 학과 가상 실습실 예약 및 제어 센터",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.6.2"
+  }
+}
