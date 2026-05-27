@@ -17,15 +17,15 @@ const reservationSchema = new mongoose.Schema(
     purpose: { type: String, required: true },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "rejected", "active", "cancelled"],
-      default: "pending",
+      enum: ["waiting", "reserved", "using", "cancelled", "completed"],
+      default: "waiting",
     },
     approved_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
-    reject_reason: { type: String, default: null },
+    cancel_reason: { type: String, default: null },
     actual_start_time: { type: Date, default: null },
     actual_end_time: { type: Date, default: null },
   },
