@@ -39,6 +39,7 @@ app.use("/api/auth", authRouter);
 const reservationRouter = require("./routes/reservation");
 app.use("/api/reservations", reservationRouter);
 
+<<<<<<< HEAD
 const containerRouter = require("./routes/containers");
 app.use("/api/containers", containerRouter);
 
@@ -57,6 +58,13 @@ app.use((req, res) => {
 
 // Global error handler (must be last)
 app.use(errorHandler);
+=======
+const userRouter = require("./routes/users");
+app.use("/api/users", userRouter);
+
+const resourceRouter = require("./routes/resources");
+app.use("/api/resources", resourceRouter);
+>>>>>>> e84f4e1 (fetal: add user, resource controller and routes)
 
 // MongoDB 연결
 mongoose
