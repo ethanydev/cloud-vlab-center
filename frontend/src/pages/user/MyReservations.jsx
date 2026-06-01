@@ -1,85 +1,117 @@
-import React, { useState } from "react";
-
-const reservations = [
-  {
-    id: 1,
-    nodeName: "Server-A-02",
-    category: "CPU Server",
-    spec: "Xeon Gold / 128GB",
-    date: "2025-05-19",
-    time: "09:00 - 11:00",
-    status: "사용중",
-    tab: "사용 중",
-  },
-  {
-    id: 2,
-    nodeName: "Server-A-01",
-    category: "GPU Server",
-    spec: "RTX 4090 / 64GB",
-    date: "2025-05-20",
-    time: "10:00 - 12:00",
-    status: "예약됨",
-    tab: "예약 예정",
-  },
-  {
-    id: 3,
-    nodeName: "Storage-01",
-    category: "NAS",
-    spec: "10TB Raid-5",
-    date: "2025-05-21",
-    time: "09:00 - 11:00",
-    status: "예약됨",
-    tab: "예약 예정",
-  },
-  {
-    id: 6,
-    nodeName: "Server-A-03",
-    category: "GPU Server",
-    spec: "RTX 4080 / 32GB",
-    date: "2025-05-22",
-    time: "15:00 - 17:00",
-    status: "대기중",
-    tab: "예약 예정",
-  },
-  {
-    id: 4,
-    nodeName: "Server-A-01",
-    category: "GPU Server",
-    spec: "RTX 4090 / 64GB",
-    date: "2025-05-18",
-    time: "13:00 - 15:00",
-    status: "완료",
-    tab: "지난 예약",
-  },
-  {
-    id: 5,
-    nodeName: "Server-A-02",
-    category: "CPU Server",
-    spec: "Xeon Gold / 128GB",
-    date: "2025-05-17",
-    time: "14:00 - 16:00",
-    status: "취소됨",
-    tab: "취소된 예약",
-  },
-];
+import React, { useEffect, useState } from "react";
+import {
+  getMyReservations,
+  cancelReservation,
+} from "../../api/reservations";
 
 function MyReservations() {
   const [activeTab, setActiveTab] = useState("예약 예정");
+  const [reservations, setReservations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const tabs = ["예약 예정", "사용 중", "지난 예약", "취소된 예약"];
 
+  const statusLabel = {
+    waiting: "대기중",
+    reserved: "예약됨",
+    using: "사용중",
+    completed: "완료",
+    cancelled: "취소됨",
+  };
+
+  const tabByStatus = {
+    waiting: "예약 예정",
+    reserved: "예약 예정",
+    using: "사용 중",
+    completed: "지난 예약",
+    cancelled: "취소된 예약",
+  };
+
+  const fetchReservations = async () => {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const data = await getMyReservations();
+      setReservations(data);
+    } catch (error) {
+      console.error("내 예약 목록 조회 실패", error);
+      setErrorMessage("예약 내역을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReservations();
+  }, []);
+
+  const handleCancel = async (id) => {
+    const confirmed = window.confirm("해당 예약을 취소하시겠습니까?");
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await cancelReservation(id);
+      alert("예약이 취소되었습니다.");
+      await fetchReservations();
+    } catch (error) {
+      console.error("예약 취소 실패", error);
+      const message =
+        error.response?.data?.message || "예약 취소에 실패했습니다.";
+      alert(message);
+    }
+  };
+
+  const formatDate = (dateTime) => {
+    if (!dateTime) {
+      return "-";
+    }
+
+    const date = new Date(dateTime);
+
+    return date.toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  };
+
+  const formatTime = (startTime, endTime) => {
+    if (!startTime || !endTime) {
+      return "-";
+    }
+
+    const start = new Date(startTime).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const end = new Date(endTime).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    return `${start} - ${end}`;
+  };
+
   const filteredReservations = reservations.filter(
-    (reservation) => reservation.tab === activeTab
+    (reservation) => tabByStatus[reservation.status] === activeTab
   );
 
   const getBadgeClassName = (status) => {
-  if (status === "대기중") return "status-badge pending";
-  if (status === "예약됨") return "status-badge reserved";
-  if (status === "사용중") return "status-badge using";
-  if (status === "완료") return "status-badge completed";
-  if (status === "취소됨") return "status-badge canceled";
-  return "status-badge";
-};
+    if (status === "waiting") return "status-badge pending";
+    if (status === "reserved") return "status-badge reserved";
+    if (status === "using") return "status-badge using";
+    if (status === "completed") return "status-badge completed";
+    if (status === "cancelled") return "status-badge canceled";
+    return "status-badge";
+  };
 
   return (
     <>
@@ -117,42 +149,68 @@ function MyReservations() {
           </thead>
 
           <tbody>
-            {filteredReservations.map((reservation) => (
-              <tr key={reservation.id}>
-                <td>{reservation.nodeName}</td>
-                <td>{reservation.category}</td>
-                <td>{reservation.spec}</td>
-                <td>{reservation.date}</td>
-                <td>{reservation.time}</td>
-                <td>
-                  <span className={getBadgeClassName(reservation.status)}>
-                    {reservation.status}
-                  </span>
-                </td>
-                <td>
-                  <div className="table-actions">
-                    {(reservation.status === "예약됨"|| reservation.status === "대기중") && (
-                      <>
-                        <button>수정</button>
-                        <button>취소</button>
-                      </>
+            {!loading &&
+              filteredReservations.map((reservation) => (
+                <tr key={reservation._id}>
+                  <td>{reservation.resource_id?.name || "-"}</td>
+                  <td>{reservation.resource_id?.lab_id || "-"}</td>
+                  <td>{reservation.resource_id?.spec || "-"}</td>
+                  <td>{formatDate(reservation.start_time)}</td>
+                  <td>
+                    {formatTime(
+                      reservation.start_time,
+                      reservation.end_time
                     )}
+                  </td>
+                  <td>
+                    <span className={getBadgeClassName(reservation.status)}>
+                      {statusLabel[reservation.status] || reservation.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {(reservation.status === "reserved" ||
+                        reservation.status === "waiting") && (
+                        <>
+                          <button>수정</button>
+                          <button
+                            onClick={() => handleCancel(reservation._id)}
+                          >
+                            취소
+                          </button>
+                        </>
+                      )}
 
-                    {reservation.status !== "예약됨" && reservation.status !== "대기중" && (
-                      <button>상세보기</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {reservation.status !== "reserved" &&
+                        reservation.status !== "waiting" && (
+                          <button>상세보기</button>
+                        )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
 
-        {filteredReservations.length === 0 && (
+        {loading && (
           <div className="empty-message">
-            해당 상태의 예약 내역이 없습니다.
+            예약 내역을 불러오는 중입니다.
           </div>
         )}
+
+        {!loading && errorMessage && (
+          <div className="empty-message">
+            {errorMessage}
+          </div>
+        )}
+
+        {!loading &&
+          !errorMessage &&
+          filteredReservations.length === 0 && (
+            <div className="empty-message">
+              해당 상태의 예약 내역이 없습니다.
+            </div>
+          )}
 
         <div className="table-footer">
           <button className="page-arrow">‹</button>
