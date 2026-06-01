@@ -120,6 +120,18 @@ exports.createReservation = async (req, res) => {
 exports.getMyReservations = async (req, res) => {
   try {
     const user_id = req.user.id;
+    const now = new Date();
+
+    // end_time이 지난 reserved 또는 using 예약 자동 완료 처리
+    await Reservation.updateMany(
+      {
+        user_id,
+        status: { $in: ["reserved", "using"] },
+        end_time: { $lt: now },
+      },
+      { $set: { status: "completed" } }
+    );
+
     const reservations = await Reservation.find({ user_id })
       .populate("resource_id", "name lab_id spec")
       .sort({ createdAt: -1 });
