@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
+  baseURL: import.meta.env.VITE_API_URL || "",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -31,8 +31,12 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem("refreshToken");
+        if (!refreshToken) {
+          // 리프레시 토큰이 없으면 리다이렉트 없이 에러만 반환
+          return Promise.reject(error);
+        }
         const res = await axios.post(
-          `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/auth/refresh`,
+          `${import.meta.env.VITE_API_URL || ""}/api/auth/refresh`,
           { refreshToken }
         );
 
