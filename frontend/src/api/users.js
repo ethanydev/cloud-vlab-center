@@ -37,3 +37,11 @@ export const deleteMyAccount = async () => {
   const res = await api.delete("/api/users/me");
   return res.data;
 };
+
+// 사용자 상태 변경 - 관리자
+export const updateUserStatus = async (id, is_active) => {
+  const res = await api.patch(`/api/users/${id}`, {
+    is_active,
+  });
+  return res.data;
+};

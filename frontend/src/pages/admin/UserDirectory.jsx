@@ -1,151 +1,299 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
+import { getUsers, updateUserStatus } from '../../api/users';
 
 export default function UserDirectory() {
-  // 💡 Admin 데이터를 빼고, 가상 실습실을 이용하는 일반 학생들로만 명단을 구성했습니다.
-  const [users, setUsers] = useState([
-    { id: 1, name: '김철수', dept: '컴퓨터공학과', studentId: '2021212836', role: 'Student', activeResources: 2, status: '정상', lastLogin: '2026-05-19' },
-    { id: 2, name: '이영희', dept: '컴퓨터공학과', studentId: '2022145099', role: 'Student', activeResources: 0, status: '정상', lastLogin: '2026-05-18' },
-    { id: 3, name: '박민수', dept: '컴퓨터공학과', studentId: '2020112423', role: 'Student', activeResources: 1, status: '이용정지', lastLogin: '2026-05-14' },
-    { id: 4, name: '정태양', dept: '컴퓨터공학과', studentId: '2023152044', role: 'Student', activeResources: 3, status: '정상', lastLogin: '2026-05-22' }
-  ]);
-
-  // 체크박스 선택 관리를 위한 ID 배열 상태
+  const [users, setUsers] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState('');
 
-  // --- [계산된 상태 항목들 (대시보드 카드용)] ---
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const data = await getUsers();
+
+      const studentUsers = Array.isArray(data)
+        ? data.filter((user) => user.role === 'student')
+        : [];
+
+      setUsers(studentUsers);
+    } catch (err) {
+      console.error('사용자 목록 조회 실패:', err);
+      setError(
+        err.response?.data?.message ||
+        '사용자 목록을 불러오지 못했습니다.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
   const totalUsers = users.length;
-  const activeRentalUsers = users.filter(u => u.activeResources > 0).length;
-  const suspendedUsers = users.filter(u => u.status === '이용정지').length;
+  const activeRentalUsers = users.filter(
+    (user) => (user.current_reservations || 0) > 0
+  ).length;
+  const suspendedUsers = users.filter(
+    (user) => !user.is_active
+  ).length;
 
-  // --- [이벤트 핸들러 함수들] ---
-  
-  // 개별 행 체크박스 토글
   const handleSelectRow = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    setSelectedIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id]
     );
   };
 
-  // 전체 선택 체크박스 토글
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedIds(users.map(u => u.id));
+      setSelectedIds(users.map((user) => user._id));
     } else {
       setSelectedIds([]);
     }
   };
 
-  // 선택된 사용자들 일괄 '이용정지' 처리
-  const handleBulkSuspend = () => {
+  const handleBulkStatusChange = async (isActive) => {
     if (selectedIds.length === 0) {
       alert('변경할 사용자를 한 명 이상 선택해 주세요.');
       return;
     }
-    if (window.confirm(`선택한 ${selectedIds.length}명의 사용자를 이용정지 처리하시겠습니까?`)) {
-      setUsers(prev => prev.map(user => 
-        selectedIds.includes(user.id) ? { ...user, status: '이용정지' } : user
-      ));
-      setSelectedIds([]); // 처리 후 체크박스 초기화
+
+    const actionText = isActive ? '정상복구' : '이용정지';
+
+    if (
+      !window.confirm(
+        `선택한 ${selectedIds.length}명의 사용자를 ${actionText} 처리하시겠습니까?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setProcessing(true);
+
+      await Promise.all(
+        selectedIds.map((id) => updateUserStatus(id, isActive))
+      );
+
+      alert(`선택한 사용자가 ${actionText} 처리되었습니다.`);
+      setSelectedIds([]);
+      await loadUsers();
+    } catch (err) {
+      console.error('사용자 상태 변경 실패:', err);
+      alert(
+        err.response?.data?.message ||
+        '사용자 상태 변경에 실패했습니다.'
+      );
+    } finally {
+      setProcessing(false);
     }
   };
 
-  // 선택된 사용자들 일괄 '정상 복구' 처리
-  const handleBulkActivate = () => {
-    if (selectedIds.length === 0) {
-      alert('변경할 사용자를 한 명 이상 선택해 주세요.');
-      return;
+  const formatDate = (dateValue) => {
+    if (!dateValue) return '-';
+
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return '-';
     }
-    if (window.confirm(`선택한 ${selectedIds.length}명의 계정을 정상 상태로 복구하시겠습니까?`)) {
-      setUsers(prev => prev.map(user => 
-        selectedIds.includes(user.id) ? { ...user, status: '정상' } : user
-      ));
-      setSelectedIds([]);
-    }
+
+    return date
+      .toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+      .replace(/ /g, '');
   };
 
   return (
     <div className="content-section" style={{ fontFamily: 'sans-serif' }}>
-      
-      {/* 상단 타이틀 구역 */}
       <h2>사용자 관리</h2>
-      <p className="section-desc">등록된 학생 목록을 조회하고 실습 권한과 제재 상태를 관리합니다.</p>
-      
-      {/* 상단 미니 대시보드 카드 섹션 */}
+      <p className="section-desc">
+        등록된 학생 목록을 조회하고 실습 권한과 제재 상태를 관리합니다.
+      </p>
+
       <SummaryCardsWrapper>
         <SummaryCard>
           <CardTitle>총 등록 학생</CardTitle>
-          <CardValue style={{ color: '#1e293b' }}>{totalUsers}명</CardValue>
+          <CardValue style={{ color: '#1e293b' }}>
+            {totalUsers}명
+          </CardValue>
         </SummaryCard>
+
         <SummaryCard>
           <CardTitle>현재 자원 대여 학생</CardTitle>
-          <CardValue style={{ color: '#2563eb' }}>{activeRentalUsers}명</CardValue>
+          <CardValue style={{ color: '#2563eb' }}>
+            {activeRentalUsers}명
+          </CardValue>
         </SummaryCard>
+
         <SummaryCard>
           <CardTitle>이용 정지 계정</CardTitle>
-          <CardValue style={{ color: '#ef4444' }}>{suspendedUsers}개</CardValue>
+          <CardValue style={{ color: '#ef4444' }}>
+            {suspendedUsers}개
+          </CardValue>
         </SummaryCard>
       </SummaryCardsWrapper>
 
-      {/* 관리자용 일괄 액션 컨트롤 바 */}
       <ControlBarWrapper>
         <ButtonGroup>
-          <ActionBtn className="suspend-btn" onClick={handleBulkSuspend}>선택 이용정지</ActionBtn>
-          <ActionBtn className="activate-btn" onClick={handleBulkActivate}>선택 정상복구</ActionBtn>
+          <ActionBtn
+            className="suspend-btn"
+            onClick={() => handleBulkStatusChange(false)}
+            disabled={processing}
+          >
+            선택 이용정지
+          </ActionBtn>
+
+          <ActionBtn
+            className="activate-btn"
+            onClick={() => handleBulkStatusChange(true)}
+            disabled={processing}
+          >
+            선택 정상복구
+          </ActionBtn>
         </ButtonGroup>
+
         <SelectedInfoText>
-          {selectedIds.length > 0 ? `${selectedIds.length}명 선택됨` : '목록을 선택해 일괄 제어 가능'}
+          {processing
+            ? '처리 중입니다.'
+            : selectedIds.length > 0
+              ? `${selectedIds.length}명 선택됨`
+              : '목록을 선택해 일괄 제어 가능'}
         </SelectedInfoText>
       </ControlBarWrapper>
 
-      {/* 목록 테이블 구역 */}
       <div className="table-wrapper" style={{ marginTop: '12px' }}>
         <table className="admin-table">
           <thead>
             <tr>
               <th style={{ width: '50px', textAlign: 'center' }}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   onChange={handleSelectAll}
-                  checked={selectedIds.length === users.length && users.length > 0}
+                  checked={
+                    selectedIds.length === users.length && users.length > 0
+                  }
                 />
               </th>
               <th>이름</th>
-              <th>학과</th>
+              <th>이메일</th>
               <th>학번 / ID</th>
               <th>권한</th>
-              <th>대여 중인 자원 수</th>
+              <th>현재 예약 수</th>
               <th>계정 상태</th>
-              <th>최근 접속일</th>
+              <th>가입일</th>
             </tr>
           </thead>
+
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id} style={{ backgroundColor: selectedIds.includes(user.id) ? '#f8fafc' : 'transparent' }}>
-                <td style={{ textAlign: 'center' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={selectedIds.includes(user.id)}
-                    onChange={() => handleSelectRow(user.id)}
-                  />
+            {loading ? (
+              <tr>
+                <td
+                  colSpan="8"
+                  style={{
+                    textAlign: 'center',
+                    padding: '40px',
+                    color: '#64748b',
+                  }}
+                >
+                  사용자 목록을 불러오는 중입니다.
                 </td>
-                <td style={{ fontWeight: '600', color: '#1e293b' }}>{user.name}</td>
-                <td>{user.dept}</td>
-                <td style={{ color: '#64748b' }}>{user.studentId}</td>
-                <td>
-                  <RoleBadge>👤 Student</RoleBadge>
-                </td>
-                <td style={{ textAlign: 'center', fontWeight: 'bold', color: user.activeResources > 0 ? '#2563eb' : '#94a3b8' }}>
-                  {user.activeResources} 개
-                </td>
-                <td>
-                  <StatusBadge status={user.status}>
-                    {user.status}
-                  </StatusBadge>
-                </td>
-                <td>{user.lastLogin}</td>
               </tr>
-            ))}
+            ) : error ? (
+              <tr>
+                <td
+                  colSpan="8"
+                  style={{
+                    textAlign: 'center',
+                    padding: '40px',
+                    color: '#ef4444',
+                  }}
+                >
+                  {error}
+                </td>
+              </tr>
+            ) : users.length === 0 ? (
+              <tr>
+                <td
+                  colSpan="8"
+                  style={{
+                    textAlign: 'center',
+                    padding: '40px',
+                    color: '#94a3b8',
+                  }}
+                >
+                  등록된 학생 사용자가 없습니다.
+                </td>
+              </tr>
+            ) : (
+              users.map((user) => {
+                const statusText = user.is_active ? '정상' : '이용정지';
+                const activeReservations = user.current_reservations || 0;
+
+                return (
+                  <tr
+                    key={user._id}
+                    style={{
+                      backgroundColor: selectedIds.includes(user._id)
+                        ? '#f8fafc'
+                        : 'transparent',
+                    }}
+                  >
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(user._id)}
+                        onChange={() => handleSelectRow(user._id)}
+                      />
+                    </td>
+
+                    <td style={{ fontWeight: '600', color: '#1e293b' }}>
+                      {user.name || '-'}
+                    </td>
+
+                    <td>{user.email || '-'}</td>
+
+                    <td style={{ color: '#64748b' }}>
+                      {user.student_id || '-'}
+                    </td>
+
+                    <td>
+                      <RoleBadge>👤 Student</RoleBadge>
+                    </td>
+
+                    <td
+                      style={{
+                        textAlign: 'center',
+                        fontWeight: 'bold',
+                        color:
+                          activeReservations > 0 ? '#2563eb' : '#94a3b8',
+                      }}
+                    >
+                      {activeReservations} 개
+                    </td>
+
+                    <td>
+                      <StatusBadge status={statusText}>
+                        {statusText}
+                      </StatusBadge>
+                    </td>
+
+                    <td>{formatDate(user.createdAt)}</td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
@@ -210,15 +358,27 @@ const ActionBtn = styled.button`
   cursor: pointer;
   transition: background-color 0.15s;
 
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
   &.suspend-btn {
     background-color: #fee2e2;
     color: #ef4444;
-    &:hover { background-color: #fca5a5; }
+
+    &:hover:not(:disabled) {
+      background-color: #fca5a5;
+    }
   }
+
   &.activate-btn {
     background-color: #dbeafe;
     color: #2563eb;
-    &:hover { background-color: #bfdbfe; }
+
+    &:hover:not(:disabled) {
+      background-color: #bfdbfe;
+    }
   }
 `;
 
@@ -242,6 +402,8 @@ const StatusBadge = styled.span`
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  background-color: ${props => props.status === '정상' ? '#dcfce7' : '#fee2e2'};
-  color: ${props => props.status === '정상' ? '#15803d' : '#b91c1c'};
+  background-color: ${(props) =>
+    props.status === '정상' ? '#dcfce7' : '#fee2e2'};
+  color: ${(props) =>
+    props.status === '정상' ? '#15803d' : '#b91c1c'};
 `;
