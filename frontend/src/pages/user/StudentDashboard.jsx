@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { getNotices } from "../../api/notices";
+import { getMyReservations } from "../../api/reservations";
+import { getMyIssues } from "../../api/issues";
+import { getResources } from "../../api/resources";
 
 function StudentDashboard({ onMovePage }) {
   const [notices, setNotices] = useState([]);
+  const [reservations, setReservations] = useState([]);
+  const [issues, setIssues] = useState([]);
+  const [resources, setResources] = useState([]);
+
   const [loadingNotices, setLoadingNotices] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+
   const [noticeError, setNoticeError] = useState("");
+  const [dashboardError, setDashboardError] = useState("");
 
   useEffect(() => {
     const fetchNotices = async () => {
@@ -25,7 +35,35 @@ function StudentDashboard({ onMovePage }) {
       }
     };
 
+    const fetchDashboardData = async () => {
+      try {
+        setLoadingDashboard(true);
+        setDashboardError("");
+
+        const [reservationData, issueData, resourceData] = await Promise.all([
+          getMyReservations(),
+          getMyIssues(),
+          getResources(),
+        ]);
+
+        setReservations(
+          Array.isArray(reservationData) ? reservationData : []
+        );
+        setIssues(Array.isArray(issueData) ? issueData : []);
+        setResources(Array.isArray(resourceData) ? resourceData : []);
+      } catch (error) {
+        console.error("학생 대시보드 정보 조회 실패", error);
+        setDashboardError(
+          error.response?.data?.message ||
+            "대시보드 정보를 불러오지 못했습니다."
+        );
+      } finally {
+        setLoadingDashboard(false);
+      }
+    };
+
     fetchNotices();
+    fetchDashboardData();
   }, []);
 
   const formatNoticeDate = (dateValue) => {
@@ -46,37 +84,120 @@ function StudentDashboard({ onMovePage }) {
       .replace(/ /g, "");
   };
 
+  const formatTime = (startTime, endTime) => {
+    if (!startTime || !endTime) {
+      return "-";
+    }
+
+    const start = new Date(startTime).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const end = new Date(endTime).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    return `${start} - ${end}`;
+  };
+
+  const statusLabel = {
+    waiting: "대기중",
+    reserved: "예약됨",
+    using: "사용 중",
+    completed: "완료",
+    cancelled: "취소됨",
+  };
+
+  const getStatusBadgeClassName = (status) => {
+    if (status === "waiting") return "status-badge pending";
+    if (status === "reserved") return "status-badge reserved";
+    if (status === "using") return "status-badge using";
+    if (status === "completed") return "status-badge completed";
+    if (status === "cancelled") return "status-badge canceled";
+    return "status-badge";
+  };
+
+  const totalReservations = reservations.length;
+
+  const usingCount = reservations.filter(
+    (reservation) => reservation.status === "using"
+  ).length;
+
+  const scheduledCount = reservations.filter(
+    (reservation) =>
+      reservation.status === "waiting" ||
+      reservation.status === "reserved"
+  ).length;
+
+  const completedCount = reservations.filter(
+    (reservation) => reservation.status === "completed"
+  ).length;
+
+  const unresolvedIssueCount = issues.filter(
+    (issue) =>
+      issue.status === "waiting" ||
+      issue.status === "in_progress"
+  ).length;
+
+  const availableResourceCount = resources.filter(
+    (resource) => resource.status === "active"
+  ).length;
+
+  const completedRate =
+    totalReservations > 0
+      ? Math.round((completedCount / totalReservations) * 100)
+      : 0;
+
+  const recentReservations = [...reservations]
+    .sort((a, b) => {
+      const firstDate = new Date(b.createdAt || b.start_time).getTime();
+      const secondDate = new Date(a.createdAt || a.start_time).getTime();
+
+      return firstDate - secondDate;
+    })
+    .slice(0, 3);
+
   return (
     <>
       <section className="page-header">
         <div>
           <h1>대시보드</h1>
-          <p>오늘의 자원 현황과 예약 정보를 확인하세요.</p>
+          <p>나의 예약 현황과 이용 정보를 확인하세요.</p>
         </div>
       </section>
+
+      {dashboardError && (
+        <p style={{ color: "#dc2626", marginBottom: "20px" }}>
+          {dashboardError}
+        </p>
+      )}
 
       <section className="summary-grid">
         <div className="summary-card">
           <p>예약 현황</p>
-          <h2>12</h2>
-          <span>오늘 예약 수</span>
+          <h2>{loadingDashboard ? "-" : totalReservations}</h2>
+          <span>내 전체 예약</span>
         </div>
 
         <div className="summary-card">
           <p>사용 중 자원</p>
-          <h2>5</h2>
+          <h2>{loadingDashboard ? "-" : usingCount}</h2>
           <span>현재 사용 중</span>
         </div>
 
         <div className="summary-card">
-          <p>이슈 대기</p>
-          <h2>3</h2>
-          <span>처리 대기 중</span>
+          <p>미해결 이슈</p>
+          <h2>{loadingDashboard ? "-" : unresolvedIssueCount}</h2>
+          <span>처리 대기 및 진행 중</span>
         </div>
 
         <div className="summary-card">
           <p>가용 자원</p>
-          <h2>8</h2>
+          <h2>{loadingDashboard ? "-" : availableResourceCount}</h2>
           <span>예약 가능</span>
         </div>
       </section>
@@ -85,31 +206,33 @@ function StudentDashboard({ onMovePage }) {
         <div className="dashboard-left-column">
           <div className="dashboard-card usage-card">
             <div className="card-header">
-              <h2>자원 사용률</h2>
-              <p>현재 전체 자원 사용 상태입니다.</p>
+              <h2>내 예약 이용 현황</h2>
+              <p>현재 내 예약 상태를 기준으로 표시됩니다.</p>
             </div>
 
             <div className="usage-content">
               <div className="usage-circle">
-                <strong>75%</strong>
-                <span>전체 사용률</span>
+                <strong>{loadingDashboard ? "-" : `${completedRate}%`}</strong>
+                <span>사용 완료율</span>
               </div>
 
               <div className="usage-list">
                 <div>
+                  <span className="dot dot-green"></span>
+                  <p>예약 예정</p>
+                  <strong>{loadingDashboard ? "-" : scheduledCount}</strong>
+                </div>
+
+                <div>
                   <span className="dot dot-blue"></span>
                   <p>사용 중</p>
-                  <strong>5</strong>
+                  <strong>{loadingDashboard ? "-" : usingCount}</strong>
                 </div>
-                <div>
-                  <span className="dot dot-green"></span>
-                  <p>예약됨</p>
-                  <strong>4</strong>
-                </div>
+
                 <div>
                   <span className="dot dot-gray"></span>
-                  <p>가용</p>
-                  <strong>3</strong>
+                  <p>사용 완료</p>
+                  <strong>{loadingDashboard ? "-" : completedCount}</strong>
                 </div>
               </div>
             </div>
@@ -134,33 +257,45 @@ function StudentDashboard({ onMovePage }) {
           <div className="dashboard-card recent-card">
             <div className="card-header">
               <h2>최근 예약</h2>
-              <p>최근 등록된 예약 현황입니다.</p>
+              <p>최근 등록한 예약 현황입니다.</p>
             </div>
 
             <div className="recent-list">
-              <div className="recent-item">
-                <div>
-                  <strong>Server-A-01</strong>
-                  <p>10:00 - 12:00</p>
+              {loadingDashboard ? (
+                <div className="recent-item">
+                  <div>
+                    <p>예약 내역을 불러오는 중입니다.</p>
+                  </div>
                 </div>
-                <span className="status-badge reserved">예약됨</span>
-              </div>
+              ) : recentReservations.length === 0 ? (
+                <div className="recent-item">
+                  <div>
+                    <p>등록된 예약이 없습니다.</p>
+                  </div>
+                </div>
+              ) : (
+                recentReservations.map((reservation) => (
+                  <div className="recent-item" key={reservation._id}>
+                    <div>
+                      <strong>
+                        {reservation.resource_id?.name || "-"}
+                      </strong>
+                      <p>
+                        {formatTime(
+                          reservation.start_time,
+                          reservation.end_time
+                        )}
+                      </p>
+                    </div>
 
-              <div className="recent-item">
-                <div>
-                  <strong>Server-A-02</strong>
-                  <p>09:00 - 11:00</p>
-                </div>
-                <span className="status-badge using">사용 중</span>
-              </div>
-
-              <div className="recent-item">
-                <div>
-                  <strong>Server-A-05</strong>
-                  <p>13:00 - 15:00</p>
-                </div>
-                <span className="status-badge using">사용 중</span>
-              </div>
+                    <span
+                      className={getStatusBadgeClassName(reservation.status)}
+                    >
+                      {statusLabel[reservation.status] || reservation.status}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

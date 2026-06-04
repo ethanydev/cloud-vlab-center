@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { getMyProfile } from "../../api/users";
 import { getMyReservations } from "../../api/reservations";
+import { getMyIssues } from "../../api/issues";
 
 function MyPage({ onLogout, onMovePage }) {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [profile, setProfile] = useState(null);
   const [reservations, setReservations] = useState([]);
+  const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -15,13 +17,17 @@ function MyPage({ onLogout, onMovePage }) {
         setLoading(true);
         setErrorMessage("");
 
-        const [profileData, reservationData] = await Promise.all([
+        const [profileData, reservationData, issueData] = await Promise.all([
           getMyProfile(),
           getMyReservations(),
+          getMyIssues(),
         ]);
 
         setProfile(profileData);
-        setReservations(reservationData);
+        setReservations(
+          Array.isArray(reservationData) ? reservationData : []
+        );
+        setIssues(Array.isArray(issueData) ? issueData : []);
       } catch (error) {
         console.error("마이페이지 정보 조회 실패", error);
         setErrorMessage(
@@ -45,7 +51,13 @@ function MyPage({ onLogout, onMovePage }) {
       return "-";
     }
 
-    return new Date(createdAt).toLocaleDateString("ko-KR", {
+    const date = new Date(createdAt);
+
+    if (Number.isNaN(date.getTime())) {
+      return "-";
+    }
+
+    return date.toLocaleDateString("ko-KR", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -72,11 +84,8 @@ function MyPage({ onLogout, onMovePage }) {
     (reservation) => reservation.status === "completed"
   ).length;
 
-  const activeCount = reservations.filter(
-    (reservation) =>
-      reservation.status === "waiting" ||
-      reservation.status === "reserved" ||
-      reservation.status === "using"
+  const usingCount = reservations.filter(
+    (reservation) => reservation.status === "using"
   ).length;
 
   if (loading) {
@@ -144,17 +153,20 @@ function MyPage({ onLogout, onMovePage }) {
                 <p>전체 예약</p>
                 <strong>{reservations.length}</strong>
               </div>
+
               <div>
                 <p>사용 완료</p>
                 <strong>{completedCount}</strong>
               </div>
+
               <div>
-                <p>진행 중</p>
-                <strong>{activeCount}</strong>
+                <p>사용 중</p>
+                <strong>{usingCount}</strong>
               </div>
+
               <div>
                 <p>등록 이슈</p>
-                <strong>-</strong>
+                <strong>{issues.length}</strong>
               </div>
             </div>
           </div>
