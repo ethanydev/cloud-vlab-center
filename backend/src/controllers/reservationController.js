@@ -19,7 +19,7 @@ async function validateReservation(resource_id, start_time, end_time, exclude_id
     const startDate = new Date(start_time);
     const endDate = new Date(end_time);
 
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
     const startDay = dayNames[startDate.getDay()];
     const endDay = dayNames[endDate.getDay()];
 
