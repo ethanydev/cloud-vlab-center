@@ -5,8 +5,8 @@ const { verifyToken, verifyAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/containers/presets  — 사용 가능한 프리셋 목록 (관리자 전용)
-router.get('/presets', verifyToken, verifyAdmin, (req, res) => {
+// GET /api/containers/presets  — 사용 가능한 프리셋 목록 (인증 불필요)
+router.get('/presets', (req, res) => {
   const presets = containerService.listPresets();
   res.json({ success: true, data: { presets } });
 });

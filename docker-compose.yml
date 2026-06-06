@@ -1,0 +1,141 @@
+services:
+
+  # ── Frontend (React SPA) ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_GRAFANA_URL: ${VITE_GRAFANA_URL:-http://localhost:3000}
+    container_name: vlab-frontend
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - backend
+
+  # ── Backend (Node.js / Express) ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vlab-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"           # 직접 접근이 필요한 경우에만 노출 (nginx 사용 시 제거 가능)
+    env_file:
+      - .env                  # JWT 시크릿, Grafana 설정 등 공통 변수
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      # MongoDB 연결 URI (docker-compose 변수 보간으로 구성)
+      MONGO_URI: "mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@lab-mongodb:27017/${MONGO_INITDB_DATABASE}?authSource=admin"
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # Docker 제어용
+    networks:
+      - monitoring
+    depends_on:
+      - mongodb
+
+  # ── Nginx (리버스 프록시) ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d                  # vlab.conf 포함
+      - ./html:/usr/share/nginx/html                # 추가 정적 파일 (옵션)
+      - ./logs:/var/log/nginx
+      - /etc/letsencrypt:/etc/letsencrypt:ro        # SSL 인증서 (HTTPS 사용 시)
+    environment:
+      TZ: Asia/Seoul
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - monitoring
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: lab-mongodb
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo/init:/docker-entrypoint-initdb.d:ro   # 초기화 스크립트
+      - ./mongo/mongod.conf:/etc/mongo/mongod.conf:ro
+    command: ["mongod", "--config", "/etc/mongo/mongod.conf"]
+    networks:
+      - monitoring
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring
+
+  # ── Node Exporter (호스트 메트릭) ─────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    networks:
+      - monitoring
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./data/grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  mongo_data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  monitoring:
+    driver: bridge

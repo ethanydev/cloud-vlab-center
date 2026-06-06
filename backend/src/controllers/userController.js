@@ -4,7 +4,7 @@ const User = require("../models/User");
 // 내 정보 조회
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select(
+    const user = await User.findOne({ _id: req.user.id, is_active: true }).select(
       "-password -refresh_token"
     );
     if (!user) {
@@ -23,14 +23,21 @@ exports.updateMe = async (req, res) => {
     const { name, email, password } = req.body;
 
     const updateFields = {};
-    if (name) updateFields.name = name;
-    if (email) updateFields.email = email;
+    if (name && name.trim()) updateFields.name = name.trim();
+    if (email && email.trim()) updateFields.email = email.trim();
     if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({ message: "비밀번호는 6자 이상이어야 합니다." });
+      }
       updateFields.password = await bcrypt.hash(password, 10);
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ message: "수정할 내용이 없습니다." });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { _id: req.user.id, is_active: true },
       { $set: updateFields },
       { new: true }
     ).select("-password -refresh_token");
@@ -48,8 +55,8 @@ exports.updateMe = async (req, res) => {
 // 회원 탈퇴 (소프트 딜리트)
 exports.deleteMe = async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
+    const user = await User.findOneAndUpdate(
+      { _id: req.user.id, is_active: true },
       { $set: { is_active: false, refresh_token: null } },
       { new: true }
     );
@@ -64,10 +71,13 @@ exports.deleteMe = async (req, res) => {
   }
 };
 
-// 전체 사용자 목록 조회 (관리자)
+// 전체 사용자 목록 조회 (관리자) - 기본적으로 전체 조회, active_only=true 시 활성 사용자만
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find()
+    const { active_only } = req.query;
+    const filter = active_only === "true" ? { is_active: true } : {};
+
+    const users = await User.find(filter)
       .select("-password -refresh_token")
       .sort({ createdAt: -1 });
 

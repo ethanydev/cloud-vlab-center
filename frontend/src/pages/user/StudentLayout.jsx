@@ -31,7 +31,7 @@ function StudentLayout({ onLogout }) {
   { id: "apply", label: "예약 신청", icon: FileText },
   { id: "reservations", label: "내 예약 현황", icon: ClipboardList },
   { id: "notices", label: "공지사항", icon: Bell },
-  { id: "issues", label: "이슈 관리", icon: AlertCircle },
+{ id: "issues", label: "이슈 관리", icon: AlertCircle },
   { id: "mypage", label: "마이페이지", icon: User },
 ];
 

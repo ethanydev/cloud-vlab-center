@@ -7,7 +7,20 @@ exports.register = async (req, res) => {
   try {
     const { name, student_id, email, password } = req.body;
 
-    const existing = await User.findOne({ student_id });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "이름을 입력해주세요." });
+    }
+    if (!student_id || !student_id.trim()) {
+      return res.status(400).json({ message: "학번을 입력해주세요." });
+    }
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: "이메일을 입력해주세요." });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: "비밀번호는 6자 이상이어야 합니다." });
+    }
+
+    const existing = await User.findOne({ student_id: student_id.trim() });
     if (existing) {
       return res.status(400).json({ message: "이미 존재하는 학번입니다." });
     }
@@ -15,9 +28,9 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await User.create({
-      name,
-      student_id,
-      email,
+      name: name.trim(),
+      student_id: student_id.trim(),
+      email: email.trim(),
       password: hashedPassword,
     });
 
@@ -32,12 +45,12 @@ exports.login = async (req, res) => {
   try {
     const { student_id, password } = req.body;
 
-    const user = await User.findOne({ student_id }).lean();
-    if (!user) return res.status(404).json({ message: "존재하지 않는 사용자" });
+    if (!student_id || !password) {
+      return res.status(400).json({ message: "학번과 비밀번호를 입력해주세요." });
+    }
 
-    // 임시 디버깅
-    console.log("DB에서 읽어온 user.role:", user.role);
-    console.log("DB에서 읽어온 user:", JSON.stringify(user));
+    const user = await User.findOne({ student_id: student_id.trim() }).lean();
+    if (!user) return res.status(404).json({ message: "존재하지 않는 사용자" });
 
     if (!user.is_active)
       return res.status(403).json({ message: "비활성화된 계정" });

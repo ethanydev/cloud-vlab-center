@@ -14,7 +14,7 @@ app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 app.use("/api", rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: process.env.NODE_ENV === "production" ? 100 : 1000,
   message: { success: false, error: { code: "RATE_LIMITED", message: "Too many requests" } }
 }));
 app.use(express.json());
@@ -47,6 +47,7 @@ app.use("/api/notices", noticeRouter);
 const issueRouter = require("./routes/issues");
 app.use("/api/issues", issueRouter);
 
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
@@ -60,9 +61,14 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
+const containerScheduler = require("./services/container.scheduler");
+
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB 연결 성공"))
+  .then(() => {
+    console.log("MongoDB 연결 성공");
+    containerScheduler.restore();
+  })
   .catch((err) => console.error("MongoDB 연결 실패:", err));
 
 const PORT = process.env.PORT || 3000;

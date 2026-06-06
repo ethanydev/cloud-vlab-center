@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { getResources } from "../../api/resources";
-import { createReservation } from "../../api/reservations";
+import { createReservation, getContainerPresets } from "../../api/reservations";
+
+const DEFAULT_PRESETS = [
+  { name: "alpine-shell",  description: "Alpine 기본 쉘 환경" },
+  { name: "jupyter",       description: "Jupyter Notebook (포트 8888)" },
+  { name: "postgres-lab",  description: "PostgreSQL 실습 DB (포트 5432)" },
+  { name: "ubuntu",        description: "Ubuntu 22.04 실습 환경 (SSH 포트 자동 배정)" },
+  { name: "centos",        description: "CentOS Stream 9 실습 환경 (SSH 포트 자동 배정)" },
+  { name: "rockylinux",    description: "Rocky Linux 9 실습 환경 (SSH 포트 자동 배정)" },
+  { name: "kalilinux",     description: "Kali Linux 실습 환경 (SSH 포트 자동 배정)" },
+];
 
 function ReservationApply({ onMovePage }) {
   const [resources, setResources] = useState([]);
   const [loadingResources, setLoadingResources] = useState(true);
+  const [presets, setPresets] = useState(DEFAULT_PRESETS);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -14,6 +25,7 @@ function ReservationApply({ onMovePage }) {
     start_time: "09:00",
     end_time: "10:00",
     purpose: "",
+    os_preset: "",
   });
 
   useEffect(() => {
@@ -26,10 +38,7 @@ function ReservationApply({ onMovePage }) {
         setResources(data);
 
         if (data.length > 0) {
-          setForm((prev) => ({
-            ...prev,
-            resource_id: data[0]._id,
-          }));
+          setForm((prev) => ({ ...prev, resource_id: data[0]._id }));
         }
       } catch (error) {
         console.error("자원 목록 조회 실패", error);
@@ -41,16 +50,46 @@ function ReservationApply({ onMovePage }) {
       }
     };
 
+    const fetchPresets = async () => {
+      try {
+        const data = await getContainerPresets();
+        setPresets(data.data?.presets || []);
+      } catch (error) {
+        console.error("프리셋 목록 조회 실패", error);
+      }
+    };
+
     fetchResources();
+    fetchPresets();
   }, []);
+
+  // 드롭다운 표시값: 하드웨어 자원은 _id, Docker 프리셋은 "preset:{name}"
+  const combinedSelectValue = form.os_preset
+    ? `preset:${form.os_preset}`
+    : form.resource_id;
+
+  const handleResourceSelect = (event) => {
+    const value = event.target.value;
+    if (value.startsWith("preset:")) {
+      const presetName = value.slice(7);
+      setForm((prev) => ({
+        ...prev,
+        // Docker 컨테이너는 서버 위에서 동작하므로 첫 번째 하드웨어 자원을 기본값으로 사용
+        resource_id: resources.length > 0 ? resources[0]._id : prev.resource_id,
+        os_preset: presetName,
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        resource_id: value,
+        os_preset: "",
+      }));
+    }
+  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const formatResourceOption = (resource) => {
@@ -68,7 +107,7 @@ function ReservationApply({ onMovePage }) {
 
     return `${resource.name} / ${resource.lab_id} / ${specText}`;
   };
-  
+
   const handleSubmit = async () => {
     if (!form.resource_id) {
       setErrorMessage("예약할 자원을 선택해주세요.");
@@ -101,7 +140,8 @@ function ReservationApply({ onMovePage }) {
         form.resource_id,
         startTime,
         endTime,
-        form.purpose.trim()
+        form.purpose.trim(),
+        form.os_preset || null
       );
 
       alert("예약 신청이 완료되었습니다.");
@@ -127,12 +167,11 @@ function ReservationApply({ onMovePage }) {
 
       <section className="form-card">
         <div className="form-grid">
-          <div className="form-group">
+          <div className="form-group full">
             <label>자원 선택</label>
             <select
-              name="resource_id"
-              value={form.resource_id}
-              onChange={handleChange}
+              value={combinedSelectValue}
+              onChange={handleResourceSelect}
               disabled={loadingResources || resources.length === 0}
             >
               {loadingResources && (
@@ -143,21 +182,36 @@ function ReservationApply({ onMovePage }) {
                 <option value="">예약 가능한 자원이 없습니다.</option>
               )}
 
-              {!loadingResources &&
-                resources.map((resource) => (
-                  <option key={resource._id} value={resource._id}>
-                    {formatResourceOption(resource)}
-                  </option>
-                ))}
+              {!loadingResources && (
+                <optgroup label="실습 서버">
+                  {resources.map((resource) => (
+                    <option key={resource._id} value={resource._id}>
+                      {formatResourceOption(resource)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {!loadingResources && presets.length > 0 && (
+                <optgroup label="Docker 컨테이너">
+                  {presets.map((preset) => (
+                    <option key={preset.name} value={`preset:${preset.name}`}>
+                      {preset.name}
+                      {preset.description ? ` — ${preset.description}` : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
-          <div className="form-group">
+          <div className="form-group full">
             <label>날짜</label>
             <input
               type="date"
               name="date"
               value={form.date}
+              min={new Date().toISOString().split("T")[0]}
               onChange={handleChange}
             />
           </div>

@@ -263,7 +263,7 @@ export default function Notice() {
                       </td>
 
                       <td style={{ padding: '16px 20px', color: '#2d3748', fontWeight: '500' }}>
-                        {notice.is_urgent && (
+                        {notice.is_urgent && !notice.title.startsWith('[긴급]') && (
                           <span style={{ color: '#e53e3e', fontWeight: '700', marginRight: '6px' }}>
                             [긴급]
                           </span>

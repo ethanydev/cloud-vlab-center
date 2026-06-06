@@ -284,28 +284,40 @@ function UsageStatus({ reservationId, onMovePage }) {
 
         <section className="content-card">
           <h2>접속 정보</h2>
-          <p className="card-description">
-            Docker 접속 정보는 추후 API 연동 후 표시됩니다.
-          </p>
+          {!reservation.os_preset ? (
+            <p className="card-description">OS 환경이 선택되지 않은 예약입니다.</p>
+          ) : !reservation.container_id ? (
+            <p className="card-description">
+              컨테이너 준비 중입니다. 예약 시작 시간에 자동으로 생성됩니다.
+            </p>
+          ) : (
+            <p className="card-description">Docker 컨테이너가 실행 중입니다.</p>
+          )}
 
           <div className="access-info-list">
             <div>
+              <span>OS 환경</span>
+              <strong>{reservation.os_preset || "-"}</strong>
+            </div>
+            <div>
               <span>IP 주소</span>
-              <strong>-</strong>
+              <strong>{reservation.container_info?.host || "-"}</strong>
             </div>
             <div>
-              <span>포트 번호</span>
-              <strong>-</strong>
-            </div>
-            <div>
-              <span>접속 방식</span>
-              <strong>-</strong>
+              <span>SSH 포트</span>
+              <strong>
+                {reservation.container_info?.ports?.[22]
+                  ? reservation.container_info.ports[22]
+                  : "-"}
+              </strong>
             </div>
           </div>
 
           <div className="ssh-box">
             <span>SSH 접속 명령어</span>
-            <code>접속 정보 연동 예정</code>
+            <code>
+              {reservation.container_info?.ssh_command || "컨테이너 준비 중..."}
+            </code>
           </div>
         </section>
       </div>

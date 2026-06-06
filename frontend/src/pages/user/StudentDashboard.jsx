@@ -278,7 +278,9 @@ function StudentDashboard({ onMovePage }) {
                   <div className="recent-item" key={reservation._id}>
                     <div>
                       <strong>
-                        {reservation.resource_id?.name || "-"}
+                        {reservation.os_preset
+                          ? `[Docker] ${reservation.os_preset}`
+                          : reservation.resource_id?.name || "-"}
                       </strong>
                       <p>
                         {formatTime(

@@ -5,6 +5,16 @@ import {
   getReservationById,
 } from "../../api/reservations";
 
+const PRESET_DESCRIPTIONS = {
+  "alpine-shell": "Alpine (SSH: root/vlab1234)",
+  "ubuntu":       "Ubuntu 22.04 (SSH: root/vlab1234)",
+  "centos":       "CentOS Stream 9 (SSH: root/vlab1234)",
+  "rockylinux":   "Rocky Linux 9 (SSH: root/vlab1234)",
+  "kalilinux":    "Kali Linux (SSH: root/vlab1234)",
+  "jupyter":      "Jupyter Notebook (포트 8888)",
+  "postgres-lab": "PostgreSQL 16 (포트 5432)",
+};
+
 function MyReservations({ onUseReservation }) {
   const [activeTab, setActiveTab] = useState("예약 예정");
   const [reservations, setReservations] = useState([]);
@@ -269,9 +279,9 @@ function MyReservations({ onUseReservation }) {
         <table className="reservation-table">
           <thead>
             <tr>
-              <th>노드 이름</th>
-              <th>자원 분류</th>
-              <th>스펙</th>
+              <th>자원 / OS</th>
+              <th>분류</th>
+              <th>스펙 / 호스트</th>
               <th>날짜</th>
               <th>시간</th>
               <th>상태</th>
@@ -283,9 +293,21 @@ function MyReservations({ onUseReservation }) {
             {!loading &&
               filteredReservations.map((reservation) => (
                 <tr key={reservation._id}>
-                  <td>{reservation.resource_id?.name || "-"}</td>
-                  <td>{reservation.resource_id?.lab_id || "-"}</td>
-                  <td>{formatSpec(reservation.resource_id?.spec)}</td>
+                  <td>
+                    {reservation.os_preset
+                      ? `[Docker] ${reservation.os_preset}`
+                      : reservation.resource_id?.name || "-"}
+                  </td>
+                  <td>
+                    {reservation.os_preset
+                      ? "컨테이너"
+                      : reservation.resource_id?.lab_id || "-"}
+                  </td>
+                  <td>
+                    {reservation.os_preset
+                      ? PRESET_DESCRIPTIONS[reservation.os_preset] || reservation.os_preset
+                      : formatSpec(reservation.resource_id?.spec)}
+                  </td>
                   <td>{formatDate(reservation.start_time)}</td>
                   <td>
                     {formatTime(
@@ -446,20 +468,37 @@ function MyReservations({ onUseReservation }) {
                   gap: "14px",
                 }}
               >
-                <DetailRow
-                  label="노드 이름"
-                  value={selectedReservation.resource_id?.name || "-"}
-                />
-
-                <DetailRow
-                  label="자원 분류"
-                  value={selectedReservation.resource_id?.lab_id || "-"}
-                />
-
-                <DetailRow
-                  label="스펙"
-                  value={formatSpec(selectedReservation.resource_id?.spec)}
-                />
+                {selectedReservation.os_preset ? (
+                  <>
+                    <DetailRow
+                      label="OS 환경"
+                      value={`[Docker] ${selectedReservation.os_preset}`}
+                    />
+                    <DetailRow
+                      label="환경 정보"
+                      value={PRESET_DESCRIPTIONS[selectedReservation.os_preset] || selectedReservation.os_preset}
+                    />
+                    <DetailRow
+                      label="호스트 노드"
+                      value={selectedReservation.resource_id?.name || "-"}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <DetailRow
+                      label="노드 이름"
+                      value={selectedReservation.resource_id?.name || "-"}
+                    />
+                    <DetailRow
+                      label="자원 분류"
+                      value={selectedReservation.resource_id?.lab_id || "-"}
+                    />
+                    <DetailRow
+                      label="스펙"
+                      value={formatSpec(selectedReservation.resource_id?.spec)}
+                    />
+                  </>
+                )}
 
                 <DetailRow
                   label="예약 날짜"

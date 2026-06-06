@@ -1,6 +1,7 @@
 const Reservation = require("../models/Reservation");
 const User = require("../models/User");
 const Resource = require("../models/Resource");
+const scheduler = require("../services/container.scheduler");
 
 async function validateReservation(resource_id, start_time, end_time, exclude_id = null) {
   const resource = await Resource.findById(resource_id);
@@ -19,33 +20,40 @@ async function validateReservation(resource_id, start_time, end_time, exclude_id
     const startDate = new Date(start_time);
     const endDate = new Date(end_time);
 
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const startDay = dayNames[startDate.getDay()];
-    const endDay = dayNames[endDate.getDay()];
+    const hasDays = Array.isArray(operating_hours.days) && operating_hours.days.length > 0;
+    const hasTime = operating_hours.start_time && operating_hours.end_time;
 
-    if (
-      !operating_hours.days.includes(startDay) ||
-      !operating_hours.days.includes(endDay)
-    ) {
-      return { valid: false, status: 400, message: "운영일이 아닙니다." };
+    if (hasDays) {
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const startDay = dayNames[startDate.getDay()];
+      const endDay = dayNames[endDate.getDay()];
+
+      if (
+        !operating_hours.days.includes(startDay) ||
+        !operating_hours.days.includes(endDay)
+      ) {
+        return { valid: false, status: 400, message: "운영일이 아닙니다." };
+      }
     }
 
-    const toMinutes = (timeStr) => {
-      const [h, m] = timeStr.split(":").map(Number);
-      return h * 60 + m;
-    };
-
-    const opStart = toMinutes(operating_hours.start_time);
-    const opEnd = toMinutes(operating_hours.end_time);
-    const resStart = startDate.getHours() * 60 + startDate.getMinutes();
-    const resEnd = endDate.getHours() * 60 + endDate.getMinutes();
-
-    if (resStart < opStart || resEnd > opEnd) {
-      return {
-        valid: false,
-        status: 400,
-        message: `운영 시간(${operating_hours.start_time}~${operating_hours.end_time}) 외 예약은 불가합니다.`,
+    if (hasTime) {
+      const toMinutes = (timeStr) => {
+        const [h, m] = timeStr.split(":").map(Number);
+        return h * 60 + m;
       };
+
+      const opStart = toMinutes(operating_hours.start_time);
+      const opEnd = toMinutes(operating_hours.end_time);
+      const resStart = startDate.getHours() * 60 + startDate.getMinutes();
+      const resEnd = endDate.getHours() * 60 + endDate.getMinutes();
+
+      if (resStart < opStart || resEnd > opEnd) {
+        return {
+          valid: false,
+          status: 400,
+          message: `운영 시간(${operating_hours.start_time}~${operating_hours.end_time}) 외 예약은 불가합니다.`,
+        };
+      }
     }
   }
 
@@ -85,32 +93,74 @@ async function validateReservation(resource_id, start_time, end_time, exclude_id
 // 예약 신청
 exports.createReservation = async (req, res) => {
   try {
-    const { resource_id, start_time, end_time, purpose } = req.body;
+    const { resource_id, start_time, end_time, purpose, os_preset } = req.body;
     const user_id = req.user.id;
+
+    // 필수 필드 검증
+    if (!resource_id || !start_time || !end_time || !purpose) {
+      return res.status(400).json({ message: "resource_id, start_time, end_time, purpose는 필수입니다." });
+    }
+
+    const startDate = new Date(start_time);
+    const endDate = new Date(end_time);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({ message: "올바른 날짜 형식이 아닙니다." });
+    }
+
+    if (startDate >= endDate) {
+      return res.status(400).json({ message: "시작 시간은 종료 시간보다 이전이어야 합니다." });
+    }
+
+    if (startDate < new Date()) {
+      return res.status(400).json({ message: "과거 시간으로는 예약할 수 없습니다." });
+    }
+
+    if (purpose.trim().length === 0) {
+      return res.status(400).json({ message: "사용 목적을 입력해주세요." });
+    }
 
     const validation = await validateReservation(resource_id, start_time, end_time);
     if (!validation.valid) {
       return res.status(validation.status).json({ message: validation.message });
     }
 
-    const user = await User.findById(user_id);
-    if (user.current_reservations >= user.max_reservations) {
+    // 원자적 연산으로 현재 예약 수 초과 여부 확인 및 증가 (Race Condition 방지)
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: user_id,
+        is_active: true,
+        $expr: { $lt: ["$current_reservations", "$max_reservations"] },
+      },
+      { $inc: { current_reservations: 1 } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      // 사용자를 찾아서 이유를 구분
+      const user = await User.findById(user_id);
+      if (!user || !user.is_active) {
+        return res.status(403).json({ message: "비활성화된 계정입니다." });
+      }
       return res.status(400).json({ message: "예약 가능 횟수를 초과했습니다." });
     }
 
-    const reservation = await Reservation.create({
-      user_id,
-      resource_id,
-      start_time,
-      end_time,
-      purpose,
-    });
+    try {
+      const reservation = await Reservation.create({
+        user_id,
+        resource_id,
+        start_time,
+        end_time,
+        purpose: purpose.trim(),
+        os_preset: os_preset || null,
+      });
 
-    await User.findByIdAndUpdate(user_id, {
-      $inc: { current_reservations: 1 },
-    });
-
-    res.status(201).json({ message: "예약 신청 완료", reservation });
+      res.status(201).json({ message: "예약 신청 완료", reservation });
+    } catch (createErr) {
+      // 예약 생성 실패 시 증가시킨 카운터 롤백
+      await User.findByIdAndUpdate(user_id, { $inc: { current_reservations: -1 } });
+      throw createErr;
+    }
   } catch (err) {
     res.status(500).json({ message: "서버 오류", error: err.message });
   }
@@ -122,8 +172,8 @@ exports.getMyReservations = async (req, res) => {
     const user_id = req.user.id;
     const now = new Date();
 
-    // end_time이 지난 reserved 또는 using 예약 자동 완료 처리
-    await Reservation.updateMany(
+    // end_time이 지난 reserved 또는 using 예약 자동 완료 처리 + 카운터 감소
+    const expiredResult = await Reservation.updateMany(
       {
         user_id,
         status: { $in: ["reserved", "using"] },
@@ -131,6 +181,11 @@ exports.getMyReservations = async (req, res) => {
       },
       { $set: { status: "completed" } }
     );
+    if (expiredResult.modifiedCount > 0) {
+      await User.findByIdAndUpdate(user_id, {
+        $inc: { current_reservations: -expiredResult.modifiedCount },
+      });
+    }
 
     const reservations = await Reservation.find({ user_id })
       .populate("resource_id", "name lab_id spec")
@@ -180,12 +235,19 @@ exports.cancelReservation = async (req, res) => {
       return res.status(400).json({ message: "이미 완료된 예약은 취소할 수 없습니다." });
     }
 
+    const prevStatus = reservation.status;
     reservation.status = "cancelled";
     await reservation.save();
 
-    await User.findByIdAndUpdate(reservation.user_id, {
-      $inc: { current_reservations: -1 },
-    });
+    // 컨테이너 스케줄 취소 또는 실행 중 컨테이너 종료
+    await scheduler.killReservationContainer(reservation._id);
+
+    // waiting 또는 reserved 상태에서만 카운터 감소 (using은 endReservation에서 처리)
+    if (prevStatus === "waiting" || prevStatus === "reserved") {
+      await User.findByIdAndUpdate(reservation.user_id, {
+        $inc: { current_reservations: -1 },
+      });
+    }
 
     res.json({ message: "예약이 취소되었습니다.", reservation });
   } catch (err) {
@@ -231,6 +293,11 @@ exports.approveReservation = async (req, res) => {
     reservation.status = "reserved";
     reservation.approved_by = req.user.id;
     await reservation.save();
+
+    // os_preset이 있으면 start_time에 컨테이너 자동 생성 스케줄링
+    if (reservation.os_preset) {
+      scheduler.schedule(reservation._id, reservation.start_time, reservation.os_preset);
+    }
 
     res.json({ message: "예약이 승인되었습니다.", reservation });
   } catch (err) {
@@ -302,6 +369,9 @@ exports.endReservation = async (req, res) => {
     reservation.status = "completed";
     reservation.actual_end_time = new Date();
     await reservation.save();
+
+    // 실행 중 컨테이너 종료
+    await scheduler.killReservationContainer(reservation._id);
 
     await User.findByIdAndUpdate(reservation.user_id, {
       $inc: { current_reservations: -1 },

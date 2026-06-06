@@ -68,7 +68,7 @@ export default function DockerControl() {
 
   // 그라파나 대시보드로 이동하는 핸들러
   const handleOpenGrafana = () => {
-    const grafanaUrl = 'http://localhost:3000';
+    const grafanaUrl = import.meta.env.VITE_GRAFANA_URL || 'http://localhost:3000';
     window.open(grafanaUrl, '_blank', 'noopener,noreferrer');
   };
 

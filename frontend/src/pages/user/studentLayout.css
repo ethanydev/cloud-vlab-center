@@ -1564,3 +1564,371 @@ body {
 .notification-setting-item .notification-toggle:not(.enabled) {
   flex-direction: row-reverse;
 }
+
+/* ========== 게시판 스타일 ========== */
+
+.board-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.board-section {
+  margin-top: 0;
+}
+
+.board-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 8px 0;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.post-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.post-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.post-list-item:last-child {
+  border-bottom: none;
+}
+
+.post-list-item:hover {
+  background: #f8fafc;
+}
+
+.post-list-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.post-list-num {
+  width: 28px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.post-list-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.post-list-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post-list-author {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.post-list-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.post-list-views,
+.post-list-date {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.post-list-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+.board-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+}
+
+.pagination-btn {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: white;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.pagination-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  font-weight: 700;
+}
+
+.pagination-btn:hover:not(.active) {
+  background: #f8fafc;
+}
+
+/* 게시글 상세 */
+.board-detail-section {
+  margin-top: 0;
+}
+
+.board-detail-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.board-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.back-button {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.back-button:hover {
+  text-decoration: underline;
+}
+
+.board-detail-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.danger-button {
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-button);
+  background: white;
+  color: #dc2626;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger-button:hover {
+  background: #fee2e2;
+}
+
+.board-detail-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 12px;
+}
+
+.board-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-muted);
+  font-size: 13px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dot-sep {
+  color: #d1d5db;
+}
+
+.board-detail-content {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* 댓글 */
+.comment-section {
+  margin-top: 28px;
+}
+
+.comment-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 20px;
+}
+
+.comment-empty {
+  color: var(--color-muted);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+.comment-item {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.comment-item:last-of-type {
+  border-bottom: none;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-meta strong {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.comment-student-id,
+.comment-date {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.comment-delete-btn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.comment-delete-btn:hover {
+  text-decoration: underline;
+}
+
+.comment-content {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.comment-input-area {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 24px;
+}
+
+.comment-textarea {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: 'Noto Sans KR', sans-serif;
+  resize: none;
+  min-height: 80px;
+  outline: none;
+}
+
+.comment-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.comment-submit-btn {
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
+/* 게시글 작성/수정 폼 */
+.board-form-section {
+  margin-top: 0;
+}
+
+.board-form-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.board-form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* NoticeCard 컴포넌트 */
+.notice-card-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notice-card-item:last-child {
+  border-bottom: none;
+}
+
+.notice-card-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notice-card-date {
+  font-size: 12px;
+  color: var(--color-muted);
+  flex-shrink: 0;
+}

@@ -5,14 +5,22 @@ export const createReservation = async (
   resource_id,
   start_time,
   end_time,
-  purpose
+  purpose,
+  os_preset = null
 ) => {
   const res = await api.post("/api/reservations", {
     resource_id,
     start_time,
     end_time,
     purpose,
+    os_preset,
   });
+  return res.data;
+};
+
+// Docker OS 프리셋 목록 조회
+export const getContainerPresets = async () => {
+  const res = await api.get("/api/containers/presets");
   return res.data;
 };
 

@@ -28,6 +28,15 @@ const reservationSchema = new mongoose.Schema(
     cancel_reason: { type: String, default: null },
     actual_start_time: { type: Date, default: null },
     actual_end_time: { type: Date, default: null },
+    os_preset: { type: String, default: null },
+    container_id: { type: String, default: null },
+    container_info: {
+      host: { type: String, default: null },
+      ports: { type: mongoose.Schema.Types.Mixed, default: null },
+      ssh_command: { type: String, default: null },
+      preset_name: { type: String, default: null },
+      started_at: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
