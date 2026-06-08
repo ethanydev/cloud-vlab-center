@@ -1,0 +1,178 @@
+services:
+
+  # ── Frontend (React SPA) ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_GRAFANA_URL: ${VITE_GRAFANA_URL:-https://ethany.org/grafana}
+    container_name: vlab-frontend
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - backend
+
+  # ── Backend (Node.js / Express) ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vlab-backend
+    restart: unless-stopped
+    # 포트 직접 노출 제거 (nginx 리버스 프록시를 통해서만 접근)
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      HOST_IP: ${HOST_IP}
+      # MONGO_URI를 .env 에서 직접 지정 (전체 연결 문자열)
+      MONGO_URI: ${MONGO_URI}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://ethany.org}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_EMAIL: ${VAPID_EMAIL:-mailto:admin@ethany.org}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      ACCESS_TOKEN_EXPIRES: ${ACCESS_TOKEN_EXPIRES:-15m}
+      REFRESH_TOKEN_EXPIRES: ${REFRESH_TOKEN_EXPIRES:-7d}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # Docker 제어용
+    networks:
+      - monitoring
+    depends_on:
+      - mongodb
+
+  # ── Nginx (리버스 프록시 + SSL) ────────────────────────────────────────────
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d                      # vlab.conf 포함
+      - ./html:/usr/share/nginx/html                    # 추가 정적 파일 (옵션)
+      - ./logs:/var/log/nginx
+      - ./data/certbot/conf:/etc/letsencrypt:ro         # SSL 인증서 (certbot)
+      - ./data/certbot/www:/var/www/certbot:ro          # ACME challenge
+    environment:
+      TZ: Asia/Seoul
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - monitoring
+
+  # ── Certbot (SSL 인증서 자동 갱신) ────────────────────────────────────────
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    # 12시간마다 인증서 갱신 시도
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - monitoring
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: lab-mongodb
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    ports:
+      - "27017:27017"   # 외부 접근 허용 (EC2 보안 그룹에서 IP 제한 권장)
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo/init:/docker-entrypoint-initdb.d:ro
+      - ./mongo/mongod.conf:/etc/mongo/mongod.conf:ro
+    command: ["mongod", "--config", "/etc/mongo/mongod.conf"]
+    networks:
+      - monitoring
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    # 포트 직접 노출 제거 (Grafana에서 내부 접근)
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring
+
+  # ── Node Exporter (호스트 메트릭) ─────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    # 포트 직접 노출 제거 (Prometheus에서 내부 접근)
+    networks:
+      - monitoring
+
+  # ── cAdvisor (컨테이너 메트릭) ────────────────────────────────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    # 포트 직접 노출 제거 (Prometheus에서 내부 접근)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    command:
+      - -store_container_labels=true
+    networks:
+      - monitoring
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    # 포트 직접 노출 제거 (nginx /grafana/ 경로로 프록시)
+    env_file:
+      - .env
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://ethany.org/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./data/grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  mongo_data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  monitoring:
+    driver: bridge
